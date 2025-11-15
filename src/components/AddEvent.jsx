@@ -1,55 +1,61 @@
 import { useState } from "react";
-import { add } from "../Bucket";
+import { Link, useNavigate } from "react-router-dom";
+import { bucketPost } from "../Bucket";
 
-
-export default function AboutMe() {
+export default function AddEvent() {
   const [title, setTitle] = useState("");
   const [date, setDate] = useState("");
-  const [audience, setAudience] = useState("friends");
+  const [description, setDescription] = useState("");
 
-  function create() {
-    if (!title.trim() || !date.trim()) return;
-    add({
+  const nav = useNavigate();
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+
+    await bucketPost("events", {
       title,
       date,
-      audience,
-      rsvps: [],
-      comments: []
-    }).then(() => {
-      setTitle("");
-      setDate("");
+      description
     });
+
+    nav("/");  // return home after saving
   }
 
   return (
-    <div style={{ padding: "1rem" }}>
-      <h1>Add Event</h1>
+    <div className="page-container">
+      <h1 className="title-whimsy"><i className="bi bi-pencil-square"></i> Add Event</h1>
 
-      <input
-        placeholder="Event title"
-        value={title}
-        onChange={e => setTitle(e.target.value)}
-      />
+      <form onSubmit={handleSubmit}>
+        <input
+          type="text"
+          placeholder="Event title"
+          value={title}
+          onChange={e => setTitle(e.target.value)}
+          required
+        />
 
-      <input
-        type="date"
-        value={date}
-        onChange={e => setDate(e.target.value)}
-        style={{ marginLeft: "1rem" }}
-      />
+        <input
+          type="date"
+          value={date}
+          onChange={e => setDate(e.target.value)}
+          required
+        />
 
-      <select
-        value={audience}
-        onChange={e => setAudience(e.target.value)}
-        style={{ marginLeft: "1rem" }}
-      >
-        <option value="friends">Friends</option>
-        <option value="group">Group</option>
-      </select>
+        <textarea
+          placeholder="Event description"
+          value={description}
+          onChange={e => setDescription(e.target.value)}
+          rows="4"
+        ></textarea>
 
-      <button onClick={create} style={{ marginLeft: "1rem" }}>
-        Add Event
-      </button>
+        <button type="submit">Save Event</button>
+      </form>
+
+      <Link to="/">
+        <button style={{ background:"#888", marginTop:"20px" }}>
+          Back to Home
+        </button>
+      </Link>
     </div>
   );
 }
