@@ -6,24 +6,30 @@ export default function AddEvent() {
   const [title, setTitle] = useState("");
   const [date, setDate] = useState("");
   const [description, setDescription] = useState("");
-
+  const [location, setLocation] = useState("");
   const nav = useNavigate();
 
   async function handleSubmit(e) {
     e.preventDefault();
+    const ownerId = CS571.getBadgerId();
 
     await bucketPost("events", {
       title,
-      date,
-      description
+      date: date || null,
+      description,
+      location,
+      ownerId,
+      createdAt: Date.now()
     });
 
-    nav("/");  // return home after saving
+    nav("/");
   }
 
   return (
     <div className="page-container">
-      <h1 className="title-whimsy"><i className="bi bi-pencil-square"></i> Add Event</h1>
+      <h1 className="title-whimsy">
+        <i className="bi bi-pencil-square"></i> Add Event
+      </h1>
 
       <form onSubmit={handleSubmit}>
         <input
@@ -38,21 +44,29 @@ export default function AddEvent() {
           type="date"
           value={date}
           onChange={e => setDate(e.target.value)}
-          required
+        />
+
+        <input
+          type="text"
+          placeholder="Location (optional)"
+          value={location}
+          onChange={e => setLocation(e.target.value)}
         />
 
         <textarea
-          placeholder="Event description"
+          placeholder="Event description (optional)"
           value={description}
           onChange={e => setDescription(e.target.value)}
           rows="4"
-        ></textarea>
+        />
 
-        <button type="submit">Save Event</button>
+        <button type="submit">
+          Save Event
+        </button>
       </form>
 
       <Link to="/">
-        <button style={{ background:"#888", marginTop:"20px" }}>
+        <button style={{ background: "#888", marginTop: "20px" }}>
           Back to Home
         </button>
       </Link>
