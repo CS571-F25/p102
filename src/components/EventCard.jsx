@@ -10,22 +10,37 @@ function getDayOfWeek(dateStr) {
   if (!dateStr) return "";
   const d = localDate(dateStr);
   if (isNaN(d.getTime())) return "";
-  return d.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
+  return d.toLocaleDateString("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric"
+  });
 }
 
 function isWithinNext10Days(dateStr) {
   if (!dateStr) return false;
   const d = localDate(dateStr);
-  if (isNaN(d.getTime())) return false;
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  const diffMs = d.getTime() - today.getTime();
-  const diffDays = diffMs / (1000 * 60 * 60 * 24);
+  const diffDays = (d - today) / 86400000;
   return diffDays >= 0 && diffDays <= 10;
 }
 
-export default function EventCard({ event, isRSVP, onToggleRSVP, onDelete }) {
+export default function EventCard({
+  event,
+  isRSVP,
+  onToggleRSVP,
+  onDelete,
+  groupName,
+  // new props for Memories page
+  showRSVP = true,
+  showEdit = true,
+  showDelete = true,
+  deleteAriaLabel = "Delete this event"
+}) {
   const [weather, setWeather] = useState(null);
+  const myBid = CS571.getBadgerId();
+  const isMine = event.ownerId === myBid;
 
   useEffect(() => {
     async function loadWeather() {
@@ -39,34 +54,30 @@ export default function EventCard({ event, isRSVP, onToggleRSVP, onDelete }) {
           )}&count=1`
         );
         const geo = await geoRes.json();
-        if (!geo.results || geo.results.length === 0) return;
-        const { latitude, longitude } = geo.results[0];
+        if (!geo.results?.length) return;
 
-        const d = localDate(event.date);
-        const iso = d.toISOString().slice(0, 10);
+        const iso = localDate(event.date).toISOString().slice(0, 10);
 
         const weatherRes = await fetch(
-          `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&daily=weathercode,temperature_2m_max&timezone=auto&start_date=${iso}&end_date=${iso}`
+          `https://api.open-meteo.com/v1/forecast?latitude=${
+            geo.results[0].latitude
+          }&longitude=${
+            geo.results[0].longitude
+          }&daily=weathercode,temperature_2m_max&timezone=auto&start_date=${iso}&end_date=${iso}`
         );
         const w = await weatherRes.json();
-        if (!w.daily || !w.daily.weathercode || w.daily.weathercode.length === 0) return;
 
         const code = w.daily.weathercode[0];
         const temp = w.daily.temperature_2m_max[0];
-        let desc = "Unknown";
 
+        let desc = "Unknown";
         if (code === 0) desc = "Clear sky";
         else if ([1, 2, 3].includes(code)) desc = "Partly cloudy";
-        else if ([45, 48].includes(code)) desc = "Foggy";
-        else if ([51, 53, 55, 56, 57].includes(code)) desc = "Drizzle";
         else if ([61, 63, 65, 80, 81, 82].includes(code)) desc = "Rain";
-        else if ([66, 67].includes(code)) desc = "Freezing rain";
-        else if ([71, 73, 75, 77, 85, 86].includes(code)) desc = "Snow";
-        else if ([95, 96, 99].includes(code)) desc = "Thunderstorm";
 
         setWeather({ desc, temp });
-      } catch (e) {
-        setWeather(null);
+      } catch {
+        // If weather fails, just ignore.
       }
     }
 
@@ -76,48 +87,134 @@ export default function EventCard({ event, isRSVP, onToggleRSVP, onDelete }) {
   const dayText = getDayOfWeek(event.date);
 
   return (
-    <div className="event-card">
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-        <div>
-          <h3>{event.title}</h3>
-          {dayText && <p>{dayText}</p>}
-          {event.date && !dayText && <p>{event.date}</p>}
-          {event.location && <p>Location: {event.location}</p>}
-          {event.description && <p>{event.description}</p>}
-          {weather && (
-            <p>
-              Forecast: {weather.desc}, {Math.round(weather.temp)}°C
-            </p>
-          )}
-        </div>
+    <article
+      className="event-card"
+      style={{
+        display: "flex",
+        flexDirection: "row",
+        justifyContent: "space-between",
+        gap: "14px",
+        borderRadius: "14px",
+        paddingBottom: "16px"
+      }}
+      aria-label={`Event card for ${event.title}`}
+    >
+      {/* LEFT SIDE INFO */}
+      <div style={{ flex: 1 }}>
+        <h2 style={{ marginTop: 0 }}>{event.title}</h2>
 
-        <div style={{ display: "flex", flexDirection: "row", gap: "6px" }}>
+        {dayText && (
+          <p style={{ margin: "4px 0" }}>
+            <i className="bi bi-calendar-event" aria-hidden="true"></i>{" "}
+            <strong>Date:</strong> {dayText}
+          </p>
+        )}
+
+        {event.location && (
+          <p style={{ margin: "4px 0" }}>
+            <i className="bi bi-geo-alt" aria-hidden="true"></i>{" "}
+            <strong>Location:</strong> {event.location}
+          </p>
+        )}
+
+        <hr className="event-divider" />
+
+        {event.description && (
+          <p style={{ margin: "4px 0" }}>
+            <i className="bi bi-chat-left-text" aria-hidden="true"></i>{" "}
+            <strong>Description:</strong> {event.description}
+          </p>
+        )}
+
+        {Array.isArray(event.tags) && event.tags.length > 0 && (
+          <p style={{ margin: "6px 0" }}>
+            <strong>
+              <i className="bi bi-tags" aria-hidden="true"></i> Tags:
+            </strong>
+            <br />
+            {event.tags.map(tag => (
+              <span key={tag} className="tag-chip">
+                {tag}
+              </span>
+            ))}
+          </p>
+        )}
+
+        {groupName && (
+          <p style={{ margin: "4px 0" }}>
+            <i className="bi bi-people-fill" aria-hidden="true"></i>{" "}
+            <strong>Group:</strong> {groupName}
+          </p>
+        )}
+
+        <p style={{ margin: "4px 0" }}>
+          <i className="bi bi-person-circle" aria-hidden="true"></i>{" "}
+          <strong>Posted by:</strong> {isMine ? "You" : "Another User"}
+        </p>
+
+        {weather && (
+          <p style={{ margin: "4px 0" }}>
+            <i className="bi bi-cloud-sun" aria-hidden="true"></i>{" "}
+            <strong>Weather:</strong> {weather.desc},{" "}
+            {Math.round(weather.temp)}°C
+          </p>
+        )}
+      </div>
+
+      {/* RIGHT SIDE BUTTON COLUMN (smaller) */}
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          gap: "8px",
+          minWidth: "70px",
+          alignItems: "stretch"
+        }}
+      >
+        {showRSVP && onToggleRSVP && (
           <button
             onClick={onToggleRSVP}
-            style={{ background: isRSVP ? "#888" : "#2f71e8", minWidth: "110px" }}
+            aria-label={isRSVP ? "Cancel RSVP" : "RSVP to this event"}
+            style={{
+              background: isRSVP ? "#888" : "#2f71e8",
+              width: "100%",
+              padding: "6px 8px",
+              fontSize: "13px"
+            }}
           >
-            {isRSVP ? "Undo RSVP" : "RSVP"}
+            {isRSVP ? "Undo" : "RSVP"}
           </button>
+        )}
 
+        {showEdit && (
           <Link to={`/EditEvent/${event.id}`}>
-            <button style={{ background: "#4b89ff", padding: "8px 10px" }}>
-              <i className="bi bi-pencil-square"></i>
-            </button>
-          </Link>
-
-          {onDelete && (
             <button
-              onClick={onDelete}
+              aria-label="Edit this event"
               style={{
-                background: "#888",
-                padding: "8px 10px"
+                background: "#4b89ff",
+                width: "100%",
+                padding: "6px 8px"
               }}
             >
-              <i className="bi bi-trash"></i>
+              <i className="bi bi-pencil-square" aria-hidden="true"></i>
             </button>
-          )}
-        </div>
+          </Link>
+        )}
+
+        {showDelete && onDelete && (
+          <button
+            aria-label={deleteAriaLabel}
+            onClick={onDelete}
+            style={{
+              background: "#888",
+              width: "100%",
+              padding: "6px 8px"
+            }}
+          >
+            <i className="bi bi-trash" aria-hidden="true"></i>
+          </button>
+        )}
       </div>
-    </div>
+    </article>
   );
 }

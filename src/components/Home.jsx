@@ -8,10 +8,31 @@ function localDate(d) {
   return new Date(Number(y), Number(m) - 1, Number(day));
 }
 
+// NEW: expiration helper
+function isExpired(ev) {
+  if (!ev.date) return false;
+  const d = localDate(ev.date);
+  if (isNaN(d.getTime())) return false;
+  const today = new Date();
+  today.setHours(0,0,0,0);
+  d.setHours(0,0,0,0);
+  return d < today;
+}
+
+const TAG_OPTIONS = ["Food", "Sports", "Night Out", "Outdoors", "Study", "Other"];
+
 export default function Home() {
   const [events, setEvents] = useState([]);
   const [rsvps, setRsvps] = useState({});
   const [sortType, setSortType] = useState("soonest");
+  const [groups, setGroups] = useState([]);
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [filterTags, setFilterTags] = useState([]);
+  const [ownerFilter, setOwnerFilter] = useState("all");
+  const [groupFilter, setGroupFilter] = useState("all");
+  const [usernames, setUsernames] = useState({});
+
+  const userId = CS571.getBadgerId();
 
   useEffect(() => {
     loadData();
@@ -20,6 +41,8 @@ export default function Home() {
   async function loadData() {
     const ev = await bucketGet("events");
     const rv = await bucketGet("rsvps");
+    const gr = await bucketGet("groups");
+    const un = await bucketGet("usernames");
 
     if (ev && ev.results) {
       const arr = Object.keys(ev.results).map(id => ({
@@ -35,6 +58,26 @@ export default function Home() {
       setRsvps(rv.results);
     } else {
       setRsvps({});
+    }
+
+    if (gr && gr.results) {
+      const arr = Object.keys(gr.results).map(id => ({
+        id,
+        ...gr.results[id]
+      }));
+      setGroups(arr);
+    } else {
+      setGroups([]);
+    }
+
+    if (un && un.results) {
+      const map = {};
+      Object.keys(un.results).forEach(id => {
+        map[id] = un.results[id].username;
+      });
+      setUsernames(map);
+    } else {
+      setUsernames({});
     }
   }
 
@@ -74,8 +117,35 @@ export default function Home() {
     await loadData();
   }
 
-  function getSortedEvents() {
-    const arr = [...events];
+  function toggleFilterTag(tag) {
+    setFilterTags(prev =>
+      prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag]
+    );
+  }
+
+  function getVisibleEvents() {
+    let arr = [...events];
+
+    // NEW: hide expired events
+    arr = arr.filter(ev => !isExpired(ev));
+
+    if (filterTags.length > 0) {
+      arr = arr.filter(ev =>
+        Array.isArray(ev.tags) &&
+        ev.tags.some(t => filterTags.includes(t))
+      );
+    }
+
+    if (ownerFilter === "mine") {
+      arr = arr.filter(ev => ev.ownerId === userId);
+    } else if (ownerFilter === "others") {
+      arr = arr.filter(ev => ev.ownerId && ev.ownerId !== userId);
+    }
+
+    if (groupFilter !== "all") {
+      arr = arr.filter(ev => ev.groupId === groupFilter);
+    }
+
     if (sortType === "soonest") {
       arr.sort((a, b) => {
         const ad = a.date ? localDate(a.date).getTime() : Infinity;
@@ -89,33 +159,26 @@ export default function Home() {
         return bt - at;
       });
     }
+
     return arr;
   }
 
-  const sortedEvents = getSortedEvents();
-  const userId = CS571.getBadgerId();
+  const visibleEvents = getVisibleEvents();
+  const groupMap = {};
+  groups.forEach(g => {
+    groupMap[g.id] = g;
+  });
 
   return (
     <div className="page-container">
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+      {/* HEADER */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "16px" }}>
         <h1 className="title-whimsy">
           <i className="bi bi-bucket"></i> Social Bucket List
         </h1>
-        <div>
-          <span style={{ marginRight: "8px" }}>
-            <i className="bi bi-sort-down"></i>
-          </span>
-          <select
-            value={sortType}
-            onChange={e => setSortType(e.target.value)}
-            style={{ padding: "6px", borderRadius: "8px", border: "1px solid #bcd0e6" }}
-          >
-            <option value="soonest">Soonest Time</option>
-            <option value="recent">Most Recently Added</option>
-          </select>
-        </div>
       </div>
 
+      {/* FILTER DROPDOWN BUTTONS */}
       <div style={{ marginBottom: "25px" }}>
         <Link to="/Groups">
           <button style={{ marginRight: "22px" }}>
@@ -136,17 +199,28 @@ export default function Home() {
             <i className="bi bi-card-checklist"></i> My RSVPs
           </button>
         </Link>
+
+        &nbsp;&nbsp;
+
+        <Link to="/Memories">
+          <button style={{ background: "#888" }}>
+            <i className="bi bi-hourglass-split"></i> Memories
+          </button>
+        </Link>
       </div>
 
-      {sortedEvents.length === 0 && <p>No events yet. Add one!</p>}
+      {/* EVENTS SECTION */}
+      {visibleEvents.length === 0 && <p>No events match your filters. Try adjusting them!</p>}
 
-      {sortedEvents.map(ev => (
+      {visibleEvents.map(ev => (
         <EventCard
           key={ev.id}
           event={ev}
           isRSVP={isRSVP(ev.id)}
           onToggleRSVP={() => toggleRSVP(ev.id)}
           onDelete={ev.ownerId === userId ? () => handleDelete(ev) : undefined}
+          groupName={ev.groupId && groupMap[ev.groupId] ? groupMap[ev.groupId].name : ""}
+          ownerName={ev.ownerId && usernames[ev.ownerId] ? usernames[ev.ownerId] : "Unknown user"}
         />
       ))}
     </div>
