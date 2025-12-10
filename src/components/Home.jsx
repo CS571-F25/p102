@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { bucketGet, bucketPost, bucketDelete } from "../Bucket";
 import EventCard from "./EventCard";
+//updated docs 
 
 function localDate(d) {
   const [y, m, day] = d.split("-");
